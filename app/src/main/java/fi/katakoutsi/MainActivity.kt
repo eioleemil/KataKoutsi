@@ -1,5 +1,7 @@
 package fi.katakoutsi
 
+import android.content.Intent
+import android.net.Uri
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
@@ -12,12 +14,12 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.platform.LocalContext
 
 private val DarkGreen = Color(0xFF12372A)
 private val LightGreen = Color(0xFFE5F0E9)
@@ -25,25 +27,25 @@ private val LightGreen = Color(0xFFE5F0E9)
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        setContent {
-            KataKoutsiApp()
-        }
+        setContent { KataKoutsiApp() }
     }
 }
 
 @Composable
 fun KataKoutsiApp() {
-    var videoName by remember { mutableStateOf("Ei vielä valittua videota") }
+    val context = LocalContext.current
+    var youtubeLink by remember { mutableStateOf("") }
+    var videoName by remember { mutableStateOf("Ei valittua videotiedostoa") }
     var feedback by remember {
-        mutableStateOf("Suorituspalautteesi näkyy täällä harjoituksen jälkeen.")
+        mutableStateOf("Valitse mallivideo aloittaaksesi.")
     }
 
     val videoPicker = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.GetContent()
+        ActivityResultContracts.GetContent()
     ) { uri ->
         if (uri != null) {
-            videoName = "Mallivideo valittu"
-            feedback = "Mallivideo on valittu. Seuraavaksi lisäämme oman suorituksen analysoinnin."
+            videoName = uri.lastPathSegment ?: "Videotiedosto valittu"
+            feedback = "Video valittu. Sen liikkeiden automaattinen analysointi lisätään myöhemmin."
         }
     }
 
@@ -66,117 +68,149 @@ fun KataKoutsiApp() {
                         .padding(22.dp)
                 ) {
                     Text(
-                        text = "🥋 KataKoutsi",
+                        "🥋 KataKoutsi",
                         color = Color.White,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold
                     )
                     Spacer(Modifier.height(8.dp))
                     Text(
-                        text = "Harjoittele. Tallenna. Kehity.",
-                        color = Color(0xFFD6E9DC),
-                        fontSize = 16.sp
+                        "Harjoittele. Tallenna. Kehity.",
+                        color = Color(0xFFD6E9DC)
                     )
                 }
 
                 Text(
-                    text = "1. Valitse mallikata",
+                    "1. Valitse mallikata",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = DarkGreen
                 )
 
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    shape = RoundedCornerShape(16.dp)
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White
+                    )
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(10.dp)
                     ) {
-                        Text("Valitse puhelimestasi video, jota haluat käyttää mallina.")
                         Text(
-                            text = videoName,
-                            color = Color.Gray
+                            "YouTube-mallivideo",
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        OutlinedTextField(
+                            value = youtubeLink,
+                            onValueChange = { youtubeLink = it },
+                            modifier = Modifier.fillMaxWidth(),
+                            label = { Text("Liitä YouTube-linkki") },
+                            placeholder = {
+                                Text("https://www.youtube.com/watch?v=...")
+                            },
+                            singleLine = true
                         )
                         Button(
-                            onClick = { videoPicker.launch("video/*") },
+                            onClick = {
+                                val link = youtubeLink.trim()
+                                val valid = runCatching {
+                                    val uri = Uri.parse(link)
+                                    (uri.scheme == "https" || uri.scheme == "http") &&
+                                        (uri.host == "youtube.com" ||
+                                         uri.host == "www.youtube.com" ||
+                                         uri.host == "m.youtube.com" ||
+                                         uri.host == "youtu.be")
+                                }.getOrDefault(false)
+
+                                if (valid) {
+                                    val intent = Intent(
+                                        Intent.ACTION_VIEW,
+                                        Uri.parse(link)
+                                    )
+                                    context.startActivity(intent)
+                                    feedback = "Mallivideo avattiin YouTubessa tai selaimessa."
+                                } else {
+                                    feedback = "Tarkista linkki. Liitä kelvollinen YouTube-videon osoite."
+                                }
+                            },
                             modifier = Modifier.fillMaxWidth(),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = DarkGreen
                             )
                         ) {
-                            Text("Valitse mallivideo")
+                            Text("Avaa YouTube-video")
+                        }
+
+                        HorizontalDivider()
+
+                        Text(
+                            "Tai valitse video puhelimesta",
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            videoName,
+                            color = Color.Gray,
+                            fontSize = 13.sp
+                        )
+                        OutlinedButton(
+                            onClick = { videoPicker.launch("video/*") },
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Text("Valitse ladattu video")
                         }
                     }
                 }
 
                 Text(
-                    text = "2. Oma kataharjoitus",
+                    "2. Oma kataharjoitus",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = DarkGreen
                 )
 
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = LightGreen),
-                    shape = RoundedCornerShape(16.dp)
+                    colors = CardDefaults.cardColors(
+                        containerColor = LightGreen
+                    )
                 ) {
                     Column(
                         modifier = Modifier.padding(16.dp),
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "Kameraharjoitus",
+                            "Kameraharjoitus",
                             fontSize = 17.sp,
                             fontWeight = FontWeight.SemiBold
                         )
                         Text(
-                            "Tähän lisätään seuraavaksi kameranäkymä, joka auttaa seuraamaan kata-liikkeitäsi."
+                            "Kameraseuranta ja kehon asentojen tunnistus lisätään seuraavassa kehitysvaiheessa."
                         )
-                        OutlinedButton(
-                            onClick = {
-                                feedback = "Kameratoimintoa ei ole vielä lisätty. Seuraavassa kehitysvaiheessa rakennamme sen."
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Avaa kameraharjoitus")
-                        }
                     }
                 }
 
                 Text(
-                    text = "3. Valmentajan palaute",
+                    "3. Valmentajan palaute",
                     fontSize = 20.sp,
                     fontWeight = FontWeight.Bold,
                     color = DarkGreen
                 )
 
                 Card(
-                    colors = CardDefaults.cardColors(containerColor = Color.White),
-                    shape = RoundedCornerShape(16.dp)
+                    colors = CardDefaults.cardColors(
+                        containerColor = Color.White
+                    )
                 ) {
-                    Column(
+                    Text(
+                        text = feedback,
                         modifier = Modifier.padding(16.dp),
-                        verticalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        Text(
-                            text = feedback,
-                            fontSize = 15.sp
-                        )
-                        Text(
-                            text = "Tavoite: tunnistaa liikkeet ja antaa vinkkejä esimerkiksi asentoon, tasapainoon ja liikeratoihin.",
-                            color = Color.Gray,
-                            fontSize = 13.sp
-                        )
-                    }
+                        fontSize = 15.sp
+                    )
                 }
 
                 Text(
-                    text = "KataKoutsi • Harjoittele omaan tahtiin",
+                    "KataKoutsi • Harjoittele omaan tahtiin",
                     color = Color.Gray,
-                    fontSize = 12.sp,
-                    modifier = Modifier.align(Alignment.CenterHorizontally)
+                    fontSize = 12.sp
                 )
             }
         }
